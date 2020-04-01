@@ -1,0 +1,604 @@
+# Get total shrub cover
+SELECT transect_id,
+       sum(shrub_end - shrub_start) / 50 AS total_shrub_cover
+  FROM shrub_data
+ GROUP BY transect_id;
+
+# Get sagebrush cover and height 
+SELECT transect_id,
+       sum(shrub_end - shrub_start) / 50 AS sagebrush_cover,
+       avg(shrub_height) AS sagebrush_height
+  FROM shrub_data
+ WHERE shrub_type != 'Other'
+ GROUP BY transect_id;
+
+# Combine above to single table
+SELECT shrub.transect_id,
+       shrub.total_shrub_cover,
+       sage.sagebrush_cover,
+       sage.sagebrush_height
+  FROM (
+           SELECT transect_id,
+                  sum(shrub_end - shrub_start) / 50 AS total_shrub_cover
+             FROM shrub_data
+            GROUP BY transect_id
+       )
+       AS shrub
+       LEFT JOIN
+       (
+           SELECT transect_id,
+                  sum(shrub_end - shrub_start) / 50 AS sagebrush_cover,
+                  avg(shrub_height) AS sagebrush_height
+             FROM shrub_data
+            WHERE shrub_type != 'Other'
+            GROUP BY transect_id
+       )
+       AS sage ON shrub.transect_id = sage.transect_id;
+
+# Combine with field info (only fields in Review Transect Data)
+SELECT t.map_unit_id,
+       t.map_unit_name,
+       t.transect_id,
+       t.meadow,
+       t.sage_species,
+       t.dist_sage,
+       shrubs.sagebrush_cover,
+       shrubs.sagebrush_height,
+       shrubs.total_shrub_cover
+  FROM field_info AS t
+       LEFT JOIN
+       (
+           SELECT shrub.transect_id,
+                  shrub.total_shrub_cover,
+                  sage.sagebrush_cover,
+                  sage.sagebrush_height
+             FROM (
+                      SELECT transect_id,
+                             sum(shrub_end - shrub_start) / 50 AS total_shrub_cover
+                        FROM shrub_data
+                       GROUP BY transect_id
+                  )
+                  AS shrub
+                  LEFT JOIN
+                  (
+                      SELECT transect_id,
+                             sum(shrub_end - shrub_start) / 50 AS sagebrush_cover,
+                             avg(shrub_height) AS sagebrush_height
+                        FROM shrub_data
+                       WHERE shrub_type != 'Other'
+                       GROUP BY transect_id
+                  )
+                  AS sage ON shrub.transect_id = sage.transect_id
+       )
+       AS shrubs ON t.transect_id = shrubs.transect_id;
+
+# Melt data
+SELECT map_unit_id,
+       transect_id,
+       plot_id,
+       'forb' AS attribute,
+       forb_class AS cover_class
+  FROM plot_data
+UNION ALL
+SELECT map_unit_id,
+       transect_id,
+       plot_id,
+       'grass' AS attribute,
+       grass_class
+  FROM plot_data
+UNION ALL
+SELECT map_unit_id,
+       transect_id,
+       plot_id,
+       'brotec' AS attribute,
+       brotec_class
+  FROM plot_data
+
+# Join cover classes
+SELECT p.map_unit_id,
+       p.transect_id,
+       p.plot_id,
+       p.attribute,
+       p.cover_class,
+       c.cover AS pct_cover
+  FROM (
+           SELECT map_unit_id,
+                  transect_id,
+                  plot_id,
+                  'forb' AS attribute,
+                  forb_class AS cover_class
+             FROM plot_data
+           UNION ALL
+           SELECT map_unit_id,
+                  transect_id,
+                  plot_id,
+                  'grass' AS attribute,
+                  grass_class
+             FROM plot_data
+           UNION ALL
+           SELECT map_unit_id,
+                  transect_id,
+                  plot_id,
+                  'brotec' AS attribute,
+                  brotec_class
+             FROM plot_data
+       )
+       AS p
+       LEFT JOIN
+       cover_classes AS c ON p.cover_class = c.class
+ ORDER BY transect_id;
+
+# Calculate percent cover per attribute
+SELECT forb_grass_data.map_unit_id,
+       forb_grass_data.transect_id,
+       AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                     plot_cover.attribute = 'forb' THEN plot_cover.pct_cover END) AS forb_cover,
+       forb_grass_data.unique_forbs,
+       AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                     plot_cover.attribute = 'grass' THEN plot_cover.pct_cover END) AS grass_cover,
+       AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                     plot_cover.attribute = 'brotec' THEN plot_cover.pct_cover END) AS brotec_cover
+  FROM forb_grass_data
+       LEFT JOIN
+       (
+           SELECT melted.map_unit_id,
+                  melted.transect_id,
+                  melted.attribute,
+                  avg(melted.pct_cover) AS pct_cover
+             FROM (
+                      SELECT p.map_unit_id,
+                             p.transect_id,
+                             p.plot_id,
+                             p.attribute,
+                             p.cover_class,
+                             c.cover AS pct_cover
+                        FROM (
+                                 SELECT map_unit_id,
+                                        transect_id,
+                                        plot_id,
+                                        'forb' AS attribute,
+                                        forb_class AS cover_class
+                                   FROM plot_data
+                                 UNION ALL
+                                 SELECT map_unit_id,
+                                        transect_id,
+                                        plot_id,
+                                        'grass' AS attribute,
+                                        grass_class
+                                   FROM plot_data
+                                 UNION ALL
+                                 SELECT map_unit_id,
+                                        transect_id,
+                                        plot_id,
+                                        'brotec' AS attribute,
+                                        brotec_class
+                                   FROM plot_data
+                             )
+                             AS p
+                             LEFT JOIN
+                             cover_classes AS c ON p.cover_class = c.class
+                  )
+                  AS melted
+            GROUP BY melted.transect_id,
+                     melted.attribute
+       )
+       AS plot_cover
+ GROUP BY forb_grass_data.transect_id;
+
+
+### CLEANED UP SHRUBS
+WITH shrub AS (
+    SELECT transect_id,
+           sum(shrub_end - shrub_start) / 50 AS total_shrub_cover
+      FROM shrub_data
+     GROUP BY transect_id
+),
+sage AS (
+    SELECT transect_id,
+           sum(shrub_end - shrub_start) / 50 AS sagebrush_cover,
+           avg(shrub_height) AS sagebrush_height
+      FROM shrub_data
+     WHERE shrub_type != 'Other'
+     GROUP BY transect_id
+),
+sage_shrub AS (
+    SELECT shrub.transect_id,
+           shrub.total_shrub_cover,
+           sage.sagebrush_cover,
+           sage.sagebrush_height
+      FROM shrub
+           LEFT JOIN
+           sage ON shrub.transect_id = sage.transect_id
+)
+SELECT field_info.map_unit_id,
+       field_info.map_unit_name,
+       field_info.transect_id,
+       field_info.meadow,
+       field_info.sage_species,
+       field_info.dist_sage,
+       sage_shrub.sagebrush_cover,
+       sage_shrub.sagebrush_height,
+       sage_shrub.total_shrub_cover
+  FROM field_info
+       LEFT JOIN
+       sage_shrub ON field_info.transect_id = sage_shrub.transect_id;
+
+### CLEANED UP COVER CLASSES
+WITH melted AS (
+    SELECT map_unit_id,
+           transect_id,
+           plot_id,
+           'forb' AS attribute,
+           forb_class AS cover_class
+      FROM plot_data
+    UNION ALL
+    SELECT map_unit_id,
+           transect_id,
+           plot_id,
+           'grass' AS attribute,
+           grass_class
+      FROM plot_data
+    UNION ALL
+    SELECT map_unit_id,
+           transect_id,
+           plot_id,
+           'brotec' AS attribute,
+           brotec_class
+      FROM plot_data
+),
+melted_cover AS (
+    SELECT melted.map_unit_id,
+           melted.transect_id,
+           melted.plot_id,
+           melted.attribute,
+           melted.cover_class,
+           cover_classes.cover AS pct_cover
+      FROM melted
+           LEFT JOIN
+           cover_classes ON melted.cover_class = cover_classes.class
+),
+plot_cover AS (
+    SELECT melted_cover.map_unit_id,
+           melted_cover.transect_id,
+           melted_cover.attribute,
+           avg(melted_cover.pct_cover) AS pct_cover
+      FROM melted_cover
+     GROUP BY melted_cover.transect_id,
+              melted_cover.attribute
+)
+SELECT forb_grass_data.map_unit_id,
+       forb_grass_data.transect_id,
+       AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                     plot_cover.attribute = 'forb' THEN plot_cover.pct_cover END) AS forb_cover,
+       forb_grass_data.unique_forbs,
+       AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                     plot_cover.attribute = 'grass' THEN plot_cover.pct_cover END) AS grass_cover,
+       AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                     plot_cover.attribute = 'brotec' THEN plot_cover.pct_cover END) AS brotec_cover
+  FROM forb_grass_data
+       LEFT JOIN
+       plot_cover ON forb_grass_data.transect_id = plot_cover.transect_id
+ GROUP BY forb_grass_data.transect_id;
+
+### COMBINE ALL
+WITH shrub AS (
+    SELECT transect_id,
+           sum(shrub_end - shrub_start) / 50 AS total_shrub_cover
+      FROM shrub_data
+     GROUP BY transect_id
+),
+sage AS (
+    SELECT transect_id,
+           sum(shrub_end - shrub_start) / 50 AS sagebrush_cover,
+           avg(shrub_height) AS sagebrush_height
+      FROM shrub_data
+     WHERE shrub_type != 'Other'
+     GROUP BY transect_id
+),
+sage_shrub AS (
+    SELECT shrub.transect_id,
+           shrub.total_shrub_cover,
+           sage.sagebrush_cover,
+           sage.sagebrush_height
+      FROM shrub
+           LEFT JOIN
+           sage ON shrub.transect_id = sage.transect_id
+),
+/* Transects present in field info will be present in final table */
+shrubs_by_transect AS (
+    SELECT field_info.map_unit_id,
+           field_info.map_unit_name,
+           field_info.transect_id,
+           field_info.meadow,
+           field_info.sage_species,
+           field_info.dist_sage,
+           sage_shrub.sagebrush_cover,
+           sage_shrub.sagebrush_height,
+           sage_shrub.total_shrub_cover
+      FROM field_info
+           LEFT JOIN
+           sage_shrub ON field_info.transect_id = sage_shrub.transect_id
+),
+melted AS (
+    SELECT map_unit_id,
+           transect_id,
+           plot_id,
+           'forb' AS attribute,
+           forb_class AS cover_class
+      FROM plot_data
+    UNION ALL
+    SELECT map_unit_id,
+           transect_id,
+           plot_id,
+           'grass' AS attribute,
+           grass_class
+      FROM plot_data
+    UNION ALL
+    SELECT map_unit_id,
+           transect_id,
+           plot_id,
+           'brotec' AS attribute,
+           brotec_class
+      FROM plot_data
+),
+melted_cover AS (
+    SELECT melted.map_unit_id,
+           melted.transect_id,
+           melted.plot_id,
+           melted.attribute,
+           melted.cover_class,
+           cover_classes.cover AS pct_cover
+      FROM melted
+           LEFT JOIN
+           cover_classes ON melted.cover_class = cover_classes.class
+),
+plot_cover AS (
+    SELECT melted_cover.map_unit_id,
+           melted_cover.transect_id,
+           melted_cover.attribute,
+           avg(melted_cover.pct_cover) AS pct_cover
+      FROM melted_cover
+     GROUP BY melted_cover.transect_id,
+              melted_cover.attribute
+),
+grasses_forbs_by_transect AS (
+    SELECT forb_grass_data.map_unit_id,
+           forb_grass_data.transect_id,
+           AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                         plot_cover.attribute = 'forb' THEN plot_cover.pct_cover END) AS forb_cover,
+           forb_grass_data.unique_forbs,
+           AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                         plot_cover.attribute = 'grass' THEN plot_cover.pct_cover END) AS grass_cover,
+           AVG(CASE WHEN plot_cover.transect_id = forb_grass_data.transect_id AND 
+                         plot_cover.attribute = 'brotec' THEN plot_cover.pct_cover END) AS brotec_cover
+      FROM forb_grass_data
+           LEFT JOIN
+           plot_cover ON forb_grass_data.transect_id = plot_cover.transect_id
+     GROUP BY forb_grass_data.transect_id
+)
+SELECT s.map_unit_id,
+       s.map_unit_name,
+       s.transect_id,
+       s.meadow,
+       s.sage_species,
+       s.dist_sage,
+       s.sagebrush_cover,
+       s.sagebrush_height,
+       s.total_shrub_cover,
+       f.forb_cover,
+       f.unique_forbs,
+       f.grass_cover,
+       f.brotec_cover
+  FROM shrubs_by_transect AS s
+       LEFT JOIN
+       grasses_forbs_by_transect AS f ON s.transect_id = f.transect_id;
+
+
+# Calculate the most common sage species
+WITH count_sage_species AS (
+    SELECT map_unit_id,
+           sage_species,
+           COUNT(sage_species) AS dominant_species
+      FROM transect_data
+     GROUP BY map_unit_id,
+              sage_species
+     ORDER BY map_unit_id
+)
+SELECT map_unit_id,
+       sage_species
+  FROM count_sage_species
+ GROUP BY map_unit_id
+HAVING max(dominant_species);
+
+### Calculate the map units view
+WITH count_sage_species AS (
+    SELECT map_unit_id,
+           sage_species,
+           COUNT(sage_species) AS dominant_species
+      FROM transect_data
+     GROUP BY map_unit_id,
+              sage_species
+     ORDER BY map_unit_id
+),
+dominant_sage_species AS (
+    SELECT map_unit_id,
+           sage_species
+      FROM count_sage_species
+     GROUP BY map_unit_id
+    HAVING max(dominant_species) 
+),
+map_unit_less_sage_species AS (
+    SELECT map_unit_id,
+           map_unit_name,
+           count(transect_id) AS no_transects,
+           meadow,
+           avg(dist_sage) AS dist_sage,
+           avg(sagebrush_cover) AS sage_cover,
+           avg(sagebrush_height) AS sage_height,
+           avg(total_shrub_cover) AS total_shrub_cover,
+           avg(forb_cover) AS forb_cover,
+           avg(unique_forbs) AS forb_rich,
+           avg(grass_cover) AS grass_cover,
+           avg(brotec_cover) AS brotec_cover
+      FROM transect_data
+     GROUP BY map_unit_id
+)
+SELECT m.map_unit_id,
+       m.map_unit_name,
+       m.no_transects,
+       m.meadow,
+       d.sage_species,
+       m.dist_sage,
+       m.sage_cover,
+       m.sage_height,
+       m.total_shrub_cover,
+       m.forb_cover,
+       m.forb_rich,
+       m.grass_cover,
+       m.brotec_cover
+  FROM map_unit_less_sage_species AS m
+       LEFT JOIN
+       dominant_sage_species AS d ON m.map_unit_id = d.map_unit_id;
+
+
+# Unstack precip
+SELECT map_unit_id,
+       (CASE WHEN precip = 'Arid' THEN proportion ELSE 0 END) AS arid,
+       (CASE WHEN precip = 'Mesic' THEN proportion ELSE 0 END) AS mesic
+  FROM project_precip;
+
+# Unstack mgmt_cats
+SELECT map_unit_id,
+       (CASE WHEN mgmt_cat = 'PHMA' THEN proportion ELSE 0 END) AS phma,
+       (CASE WHEN mgmt_cat = 'GHMA' THEN proportion ELSE 0 END) AS ghma,
+       (CASE WHEN mgmt_cat = 'OHMA' THEN proportion ELSE 0 END) AS ohma
+  FROM project_mgmt_cats;
+
+
+# Get base contribution
+SELECT b.map_unit_id,
+s.standard_value as base_contribution
+  FROM baseline_rr_inputs as b
+       LEFT JOIN
+       standard_values as s
+ WHERE s.variable = 'standard_contribution';
+
+# Get rr rating
+SELECT i.map_unit_id,
+       i.rr_score,
+       r.category as rr_rating
+  FROM baseline_rr_inputs AS i
+       LEFT JOIN
+       rr_scores AS r ON i.rr_score >= r.score
+ GROUP BY i.map_unit_id
+HAVING max(r.score);
+
+# Get wildfire rating
+SELECT i.map_unit_id,
+       i.wildfire_score AS wildfire_rating,
+       w.category
+  FROM baseline_rr_inputs AS i
+       LEFT JOIN
+       wildfire_scores AS w ON i.wildfire_score >= w.score
+ GROUP BY i.map_unit_id
+HAVING max(w.score);
+
+### Get combined reserve account
+WITH base_contribution AS (
+    SELECT b.map_unit_id,
+           s.standard_value AS base_contribution
+      FROM baseline_rr_inputs AS b
+           LEFT JOIN
+           standard_values AS s
+     WHERE s.variable = 'standard_contribution'
+),
+rr_rating AS (
+    SELECT i.map_unit_id,
+           i.rr_score,
+           r.category AS rr_rating
+      FROM baseline_rr_inputs AS i
+           LEFT JOIN
+           rr_scores AS r ON i.rr_score >= r.score
+     GROUP BY i.map_unit_id
+    HAVING max(r.score) 
+),
+wildfire_rating AS (
+    SELECT i.map_unit_id,
+           i.wildfire_score,
+           w.category AS wildfire_rating
+      FROM baseline_rr_inputs AS i
+           LEFT JOIN
+           wildfire_scores AS w ON i.wildfire_score >= w.score
+     GROUP BY i.map_unit_id
+    HAVING max(w.score) 
+),
+combined_rating AS (
+    SELECT rr_rating.map_unit_id,
+           rr_rating.rr_rating,
+           wildfire_rating.wildfire_rating
+      FROM rr_rating
+           LEFT JOIN
+           wildfire_rating ON rr_rating.map_unit_id = wildfire_rating.map_unit_id
+)
+SELECT b.map_unit_id,
+       b.base_contribution,
+       c.rr_rating,
+       c.wildfire_rating,
+       rr.contribution AS wildfire_contribution,
+       i.land_use_contribution,
+       (b.base_contribution + rr.contribution + i.land_use_contribution) AS total_contribution
+  FROM base_contribution AS b
+       LEFT JOIN
+       combined_rating AS c ON b.map_unit_id = c.map_unit_id
+       LEFT JOIN
+       rr_add_contribution AS rr ON c.rr_rating = rr.rr AND 
+                                    c.wildfire_rating = rr.wildfire
+       LEFT JOIN
+       baseline_rr_inputs AS i ON b.map_unit_id = i.map_unit_id;
+
+# Get baseline weighted by mgmt zone
+SELECT d.map_unit_id,
+       d.indirect_benefits_area,
+       d.mz3,
+       d.mz4,
+       d.mz5,
+       b.season,
+       b.baseline,
+       SUM(CASE WHEN b.mgmt_zone = 'MZ III' THEN d.mz3 * b.baseline END) AS mz3_weighted,
+       SUM(CASE WHEN b.mgmt_zone = 'MZ IV' THEN d.mz4 * b.baseline END) AS mz4_weighted,
+       SUM(CASE WHEN b.mgmt_zone = 'MZ V' THEN d.mz5 * b.baseline END) AS mz5_weighted
+  FROM view_desktop_results AS d
+       LEFT JOIN
+       standard_baseline AS b
+ GROUP BY d.map_unit_id,
+          b.season;
+
+# Get Tidy baseline data
+WITH weighted_baseline AS (
+    SELECT d.map_unit_id,
+           d.indirect_benefits_area,
+           d.mz3,
+           d.mz4,
+           d.mz5,
+           b.season,
+           SUM(CASE WHEN b.mgmt_zone = 'MZ III' THEN d.mz3 * b.baseline END) AS mz3_weighted,
+           SUM(CASE WHEN b.mgmt_zone = 'MZ IV' THEN d.mz4 * b.baseline END) AS mz4_weighted,
+           SUM(CASE WHEN b.mgmt_zone = 'MZ V' THEN d.mz5 * b.baseline END) AS mz5_weighted
+      FROM view_desktop_results AS d
+           LEFT JOIN
+           standard_baseline AS b
+     GROUP BY d.map_unit_id,
+              b.season
+)
+SELECT map_unit_id,
+       season,
+       (mz3_weighted + mz4_weighted + mz5_weighted) AS baseline
+  FROM weighted_baseline;
+;
+
+# Get max score for each attribute
+SELECT d.map_unit_id, d.sage_cover, s.attr_value, s.b_sage_cover
+FROM map_unit_data_view as d
+LEFT JOIN scoring_curves_v100 AS s ON d.sage_cover * 100 >= s.attr_value
+GROUP BY d.map_unit_id
+HAVING max(s.attr_value)

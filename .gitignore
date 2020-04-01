@@ -1,0 +1,10 @@
+.vscode
+__pycache__
+notebooks
+sqlite_studio_files
+.read
+data/external/*
+!*.keep
+data/processed/*
+!*.keep
+test.db
