@@ -400,7 +400,7 @@ def score_site_scale(site_scale_values):
     # First calculate the weighted sum
     site_scale_scores['summer'] = (
         (site_scale_scores['s_forage'] 
-            * get_func_weight('summer', 'forage')
+         * get_func_weight('summer', 'forage')
         + site_scale_scores['s_cover'] 
         * get_func_weight('summer', 'cover'))
         * site_scale_scores['brotec_cover']
@@ -743,6 +743,7 @@ def project_site_scale(projected_values, site_scale_values):
     projected_site_scale = projected_site_scale[site_scale_values.columns]
 
     return projected_site_scale
+
 
 def run_calculator():
     # Score current site-scale values

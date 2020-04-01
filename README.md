@@ -6,6 +6,8 @@ Save the Project Calculator within `data/external/` and specify path in `calc_cr
 
 Recommend downloading [SQLite Studio](https://sqlitestudio.pl/) for exploring the database.
 
+
+
 ## Contents
 
 **initialize_database.bat**: a convenience batch file for initializing the database. Creates a database `test.db` in the root folder. Delete the existing database before running.
@@ -73,7 +75,7 @@ The final version should take as input the outputs of the GIS process and the fi
 4. **view_reserve_account**: reserve account required by map unit
 5. **view_baseline**: regional standard baseline values by map unit
 
-##### Dataframes from site_scale_calc.py
+##### Dataframes from credit_calc.py
 
 1. **current_site_scale**: site scale values scored, weighted and combined by season
 2. **current_facres**: f-acres per map unit for current condition (similar to 3.1 View Credit Results) 
