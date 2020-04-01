@@ -2,15 +2,13 @@
 
 This library reads the NV CCS Credit Project Calculator v1.6 into a database. The intent of this library is to evolve to serve as the Registry Database. For now, it serves as an efficient means of reading a single Project Calculator.
 
-Save the Project Calculator within `data/external/` and specify path in `main()`.
+Save the Project Calculator within `data/external/` and specify path in `calc_credits.py`.
 
 Recommend downloading [SQLite Studio](https://sqlitestudio.pl/) for exploring the database.
 
 ## Contents
 
 **initialize_database.bat**: a convenience batch file for initializing the database. Creates a database `test.db` in the root folder. Delete the existing database before running.
-
-**test.db**: a database that includes the Crawford project as an example. Eventually, multiple projects will be supported.
 
 **scripts/**
 
@@ -21,7 +19,7 @@ Recommend downloading [SQLite Studio](https://sqlitestudio.pl/) for exploring th
 * **models.py**: includes classes:
   * `CreditCalculator` where each property describes how to read from the correct tab of the Project Calculator to create a pandas data frame from the data
   * `PolicyTables` reads policy tables into an object for convenient reference by version.
-* **site_scale_calc.py**: creates a credit report for current and projected conditions using tables from the database. Saves reports to `data/processed/`.
+* **calc_credits.py**: creates a credit report for current and projected conditions using tables from the database. Saves reports to `data/processed/`. A table of projected values may be provided (see user defined inputs).
 
 **sql/**
 
@@ -81,11 +79,11 @@ The final version should take as input the outputs of the GIS process and the fi
 2. **current_facres**: f-acres per map unit for current condition (similar to 3.1 View Credit Results) 
 3. **baseline_corrected**: baseline scores where lower site-scale scores are substituted for regional standard baseline per map unit
 4. **baseline_facres**: f-acres per map unit using corrected baseline values
-5. **current_credits**: credits resulting from difference between baseline and current conditions
+5. **current_credits**: credits resulting from difference between baseline and current conditions. Saved out to `data/processed/`
 6. **projected_site_scale**: site scale values with projected values are substituted for current where provided
 7. **projected_scores**: site scale scores for projected condition
 8. **projected_facres**: f-acres per map unit for projected condition
-9. **projected_credits**: credits resulting from difference between projected and current conditions
+9. **projected_credits**: credits resulting from difference between projected and current conditions. Saved out to `data/processed/`
 
 ## Tips
 
