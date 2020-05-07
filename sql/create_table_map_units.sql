@@ -10,11 +10,5 @@ CREATE TABLE IF NOT EXISTS map_units (
     summer_hsi real,
     winter_hsi real,
     pj_cover real,
-    current_breed real,
-    current_summer real,
-    current_winter real,
-    projected_breed real,
-    projected_summer real,
-    projected_winter real,
     no_transects integer
 );

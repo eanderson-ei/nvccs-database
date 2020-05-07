@@ -29,12 +29,12 @@ WITH precip_unstack AS (
            m.spring_hsi,
            m.summer_hsi,
            m.winter_hsi,
-           m.current_breed,
-           m.current_summer,
-           m.current_winter,
-           m.projected_breed,
-           m.projected_summer,
-           m.projected_winter,
+           cl.ls_breed as current_breed,
+           cl.ls_summer as current_summer,
+           cl.ls_winter as current_winter,
+           pl.ls_breed as projected_breed,
+           pl.ls_summer as projected_summer,
+           pl.ls_winter as projected_winter,
            mgmt.phma,
            mgmt.ghma,
            mgmt.ohma,
@@ -44,6 +44,10 @@ WITH precip_unstack AS (
            precip.arid,
            precip.mesic
       FROM map_units AS m
+           LEFT JOIN
+           current_ls AS cl ON m.map_unit_id = cl.map_unit_id
+           LEFT JOIN
+           projected_ls AS pl ON m.map_unit_id = pl.map_unit_id
            LEFT JOIN
            mgmt_cat_unstack AS mgmt ON m.map_unit_id = mgmt.map_unit_id
            LEFT JOIN

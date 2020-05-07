@@ -22,6 +22,8 @@ def main():
     start = time.time()
     print('reading calculator at ' + credit_calc_file)
     map_units_df = project_calc.map_units_df
+    current_ls_df = project_calc.current_ls_df
+    projected_ls_df = project_calc.projected_ls_df
     transects_data_df = project_calc.transects_data_df
     mgmt_cats_df = project_calc.mgmt_cats_df
     wmz_df = project_calc.wmz_df
@@ -49,6 +51,8 @@ def main():
     # read in sql files
     print('reading sql files')
     map_units_sql = 'sql/insert_map_units.sql'
+    current_ls_sql = 'sql/insert_current_ls.sql'
+    projected_ls_sql = 'sql/insert_projected_ls.sql'
     transect_data_sql = 'sql/insert_transect_data.sql'
     mgmt_cats_sql = 'sql/insert_project_mgmt_cats.sql'
     project_wmz_sql = 'sql/insert_project_wmz.sql'
@@ -85,6 +89,16 @@ def main():
         for _, map_unit in map_units_df.iterrows():
             data = tuple(map_unit)
             insert_data(conn, map_units_sql, data)
+        
+        print('inserting current local-scale')
+        for _, current_ls in current_ls_df.iterrows():
+            data = tuple(current_ls)
+            insert_data(conn, current_ls_sql, data)
+        
+        print('inserting projected local-scale')
+        for _, projected_ls in projected_ls_df.iterrows():
+            data = tuple(projected_ls)
+            insert_data(conn, projected_ls_sql, data)
         
         print('inserting transect data')
         for _, transect in transects_data_df.iterrows():

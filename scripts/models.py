@@ -1,6 +1,11 @@
+# for CreditCalculator class
 import pandas as pd
 import numpy as np
 import os
+
+# for CreditData class
+from components import create_connection
+from collections import OrderedDict
 
 # TODO Add column names to each df
 
@@ -15,9 +20,31 @@ class CreditCalculator:
             self.calc_file, 
             '1.1 Enter Map Unit Data',
             skiprows=5, header=None,
-            usecols="C:G,J:V")  # read TRUE/FALSE as bool (0) in indirect_benefits
+            usecols="C:G,J:O,V")  # read TRUE/FALSE as bool (0) in indirect_benefits
         map_units_df = map_units_df[map_units_df.iloc[:,0].notnull()]
         return map_units_df
+    
+    @property
+    def current_ls_df(self):
+        # read in current local-scale values from map unit table
+        current_ls_df = pd.read_excel(
+            self.calc_file,
+            '1.1 Enter Map Unit Data',
+            skiprows=5, header=None,
+            usecols="C,P:R"
+        )
+        return current_ls_df
+    
+    @property
+    def projected_ls_df(self):
+        # read in projected local-scale values from map unit table
+        projected_ls_df = pd.read_excel(
+            self.calc_file,
+            '1.1 Enter Map Unit Data',
+            skiprows=5, header=None,
+            usecols="C,S:U"
+        )
+        return projected_ls_df
     
     @property
     def transects_data_df(self):
@@ -302,7 +329,105 @@ class PolicyTables:
     pass
 
     
-        
+class CreditData:
+    def __init__(self, db):
+        self.db = db
+        self.conn = create_connection(self.db)
 
+    @property
+    def desktop_results(self):
+        desktop_results = pd.read_sql_query(
+            """SELECT * FROM view_desktop_results""", self.conn
+            )
+        return desktop_results
+
+    @property
+    def site_scale_values(self):
+        site_scale_values = pd.read_sql_query(
+            """SELECT * FROM view_site_scale_values""", self.conn
+            )
+        return site_scale_values
+
+    @property
+    def current_ls(self):
+        current_ls = pd.read_sql_query(
+            """SELECT * FROM current_ls""", self.conn
+        )
+        return current_ls
+
+    @property
+    def projected_ls(self):
+        projected_ls = pd.read_sql_query(
+            """SELECT * FROM projected_ls""", self.conn
+        )
+        return projected_ls
+
+    @property
+    def scoring_curves(self):
+        scoring_curves = pd.read_sql_query(
+            """SELECT * FROM scoring_curves_v100""", self.conn,
+            index_col= 'attr_value'
+            )
+        return scoring_curves
+
+    @property
+    def scoring_weights(self):
+        scoring_weights = pd.read_sql_query(
+            """SELECT * FROM scoring_weights""", self.conn,
+            index_col=['season', 'attribute']
+            )
+        return scoring_weights
+
+    @property
+    def standard_baseline(self):
+        standard_baseline = pd.read_sql_query(
+            """SELECT * FROM view_baseline""", self.conn
+            )
+        return standard_baseline
+
+    @property
+    def multipliers_policy(self):
+        multipliers_policy = pd.read_sql_query(
+            """SELECT * FROM mgmt_multiplier""", self.conn
+            )
+        return multipliers_policy
+
+    @property
+    def standard_values(self):
+        standard_values = pd.read_sql_query(
+            """SELECT * FROM standard_values""", self.conn
+            )
+        return standard_values
     
+    @property
+    def reserve_account(self):
+        reserve_account = pd.read_sql_query(
+            """SELECT * FROM view_reserve_account""", self.conn
+            )
+        return reserve_account
+
+    @property
+    def projected_values(self):
+        projected_values = pd.read_sql_query(
+            """SELECT * FROM projected_values""", self.conn
+            )
+        return projected_values
+
+    @property
+    def curve_lookup(self):
+        # Scoring curves base names
+        curve_lookup = OrderedDict([
+            ('b_sage_cover', 'sage_cover'),
+            ('b_shrub_cover', 'shrub_cover'),
+            ('b_forb_cover', 'forb_cover'),
+            ('b_forb_rich', 'forb_rich'),
+            ('s_forb_cover', 'forb_cover'),
+            ('s_forb_rich', 'forb_rich'),
+            ('s_grass_cover', 'grass_cover'),
+            ('s_dist_sage', 'dist_sage'),
+            ('w_sage_height', 'sage_height'),
+            ('w_sage_cover', 'sage_cover'),
+            ('brotec_cover', 'brotec_cover')
+        ])
+        return curve_lookup    
     

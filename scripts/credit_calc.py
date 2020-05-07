@@ -1,88 +1,29 @@
 import pandas as pd
 import numpy as np
-from components import create_connection
-from collections import OrderedDict
 from math import floor
+from models import CreditData
+import os
 
-# User-defined inputs
-projected_values_input = None
-output_suffix = ''
-
-if projected_values_input:
-    projected_values = pd.read_csv(projected_values_input)
 
 # Constants
-
 BREEDING_TRIGGER = 0.3
-
-
-# Database tables
-
-database = 'test.db'
-conn = create_connection(database)
-
-    
-desktop_results = pd.read_sql_query(
-    """SELECT * FROM view_desktop_results""", conn
-    )
-
-site_scale_values = pd.read_sql_query(
-    """SELECT * FROM view_site_scale_values""", conn
-    )
-
-scoring_curves = pd.read_sql_query(
-    """SELECT * FROM scoring_curves_v100""", conn,
-    index_col= 'attr_value'
-    )
-
-scoring_weights = pd.read_sql_query(
-    """SELECT * FROM scoring_weights""", conn,
-    index_col=['season', 'attribute']
-    )
-
-standard_baseline = pd.read_sql_query(
-    """SELECT * FROM view_baseline""", conn
-    )
-
-multipliers_policy = pd.read_sql_query(
-    """SELECT * FROM mgmt_multiplier""", conn
-    )
-
-standard_values = pd.read_sql_query(
-    """SELECT * FROM standard_values""", conn
-    )
-
-reserve_account = reserve_account = pd.read_sql_query(
-    """SELECT * FROM view_reserve_account""", conn
-    )
-
-if not projected_values_input:
-    projected_values = pd.read_sql_query(
-        """SELECT * FROM projected_values""", conn
-        )
-
-
-# Scoring curves base names
-
-curve_lookup = OrderedDict([
-    ('b_sage_cover', 'sage_cover'),
-    ('b_shrub_cover', 'shrub_cover'),
-    ('b_forb_cover', 'forb_cover'),
-    ('b_forb_rich', 'forb_rich'),
-    ('s_forb_cover', 'forb_cover'),
-    ('s_forb_rich', 'forb_rich'),
-    ('s_grass_cover', 'grass_cover'),
-    ('s_dist_sage', 'dist_sage'),
-    ('w_sage_height', 'sage_height'),
-    ('w_sage_cover', 'sage_cover'),
-    ('brotec_cover', 'brotec_cover')
-])
 
 
 # Functions
 
-def score_site_scale(site_scale_values):
-    ''' Returns dataframe with score of provides site_scale_values'''
+def score_site_scale(project, site_scale_values):
+    '''
+    Returns dataframe with score of provided site_scale_values
+    :param project: an instance of the CreditData class. Used to get
+    scoring curves and scoring weights associated with the project.
+    :param site_scale_values: the site_scale_values table to be
+    scored.
+    '''
+    
+    # read from database
+    scoring_curves = project.scoring_curves
+    curve_lookup = project.curve_lookup
+    scoring_weights = project.scoring_weights
 
     # helper function to lookup score of any value against any scoring curve
     def score_attribute(hab_value, curve_name):
@@ -481,25 +422,29 @@ def correct_baseline(standard_baseline, current_site_scale):
     # Plug this into calc_facres to get baseline facres
 
 
-def calc_facres(desktop_results, site_scale_scores):
+def calc_facres(desktop_results, site_scale_scores, local_scale):
     '''Returns f-acre report for any set of site_scale_scores'''
     
     # Subset desktop_results 
-    current_facres_report = (
+    facres_report = (
         desktop_results[
             ['map_unit_id', 
              'map_unit_name', 
              'meadow', 
-             'map_unit_area',
-             'current_breed',
-             'current_summer',
-             'current_winter']
+             'map_unit_area']
             ]
         .copy()
     )
     
+    # Join local_scale
+    facres_report = pd.merge(
+        facres_report,
+        local_scale,
+        how='left',
+        on='map_unit_id'
+    )
+    
     # Join site_scale_scores
-    facres_report = current_facres_report
     facres_report = pd.merge(
         facres_report, 
         site_scale_scores[
@@ -514,12 +459,13 @@ def calc_facres(desktop_results, site_scale_scores):
     # Calculate habitat function
     for season in ['breed', 'summer', 'winter']:
         facres_report[season + '_overall'] = (
-            facres_report[season] * facres_report['current_' + season]
+            facres_report[season] * facres_report['ls_' + season]
         )
         
         # Calculate functional acres
         facres_report[season + '_facres'] = (
-            facres_report[season +'_overall'] * facres_report['map_unit_area']
+            facres_report[season +'_overall'] 
+            * facres_report['map_unit_area']
         )
     
     # re-order columns
@@ -529,15 +475,15 @@ def calc_facres(desktop_results, site_scale_scores):
         'meadow', 
         'map_unit_area', 
         'breed',
-        'current_breed', 
+        'ls_breed', 
         'breed_overall', 
         'breed_facres', 
         'summer',
-        'current_summer', 
+        'ls_summer', 
         'summer_overall', 
         'summer_facres', 
         'winter',
-        'current_winter', 
+        'ls_winter', 
         'winter_overall', 
         'winter_facres'
     ]
@@ -547,9 +493,19 @@ def calc_facres(desktop_results, site_scale_scores):
     return facres_report
 
 
-def calc_credits(pre_facre_report, post_facre_report):
-    '''Returns credits as difference between pre_facre_report and post_facre_report.
-    Use calc_facres to get reports'''
+def calc_credits(project, desktop_results, pre_facre_report, post_facre_report):
+    '''
+    Returns credits as difference between pre_facre_report and post_facre_report.
+    :param project: an instance of the CreditData class. Used to get reserve account,
+    standard values and mulipliers policy data associated with the project.
+    :param desktop_results: the desktop_results view from the project database
+    :param *_facre_report: the pre or post f_acre report from calc_facres()
+    '''
+    
+    # read from database
+    reserve_account = project.reserve_account
+    standard_values = project.standard_values
+    multipliers_policy = project.multipliers_policy
     
     # merge pre and post reports on map_unit_id
     credit_compare = pd.merge(
@@ -680,11 +636,13 @@ def calc_credits(pre_facre_report, post_facre_report):
 
 
 def project_site_scale(projected_values, site_scale_values):
-    '''Subtstiutes projected_values for site_scale_values. Projected_values 
+    '''
+    Substitutes projected_values for site_scale_values. Projected_values 
     should be in tidy form with columns ['map_unit_id', 'hab_attr', and 
-    'attr_value']'''
+    'attr_value']
+    '''
     
-    # Pivot projeted values
+    # Pivot projected values
     projected_pivot = (
         projected_values
         .set_index(['map_unit_id', 'hab_attr'])
@@ -707,6 +665,8 @@ def project_site_scale(projected_values, site_scale_values):
     
     projected_single = projected_pivot[['map_unit_id']].copy()
     
+    # average any values that appear in multiple seasons (values should
+    # be identical given one field assessment)
     for hab_attr in hab_attrs:
         filt = projected_pivot.columns.str.endswith(hab_attr)
         if filt.sum() > 0:  # one or more columns ends with hab_attr
@@ -745,45 +705,87 @@ def project_site_scale(projected_values, site_scale_values):
     return projected_site_scale
 
 
-def run_calculator():
+def run_calculator(project, projected_values_input=None):
+    """
+    returns current and projectd credit dataframes
+    :param project: an instance of the CreditData class.
+    :param projected_values_input: optional table of 
+    projected_values as csv. Projected_values should be in tidy form with 
+    columns ['map_unit_id', 'hab_attr', and 'attr_value']
+    """
+    # read in projected_values csv if provided, or read from database
+    if projected_values_input:
+        projected_values = pd.read_csv(projected_values_input)
+    else:
+        projected_values = project.projected_values
+    
+    # read from database
+    site_scale_values = project.site_scale_values
+    current_ls = project.current_ls
+    projected_ls = project.projected_ls
+    desktop_results = project.desktop_results
+    standard_baseline = project.standard_baseline
+    
     # Score current site-scale values
-    current_site_scale = score_site_scale(site_scale_values)
+    current_site_scale = score_site_scale(project, site_scale_values)
     
     # Create current functional acre report
-    current_facres = calc_facres(desktop_results, current_site_scale)
+    current_facres = calc_facres(desktop_results, current_site_scale, 
+                                 current_ls)
     
     # Get baseline site scale scores
-    baseline_corrected = correct_baseline(standard_baseline, current_site_scale)
+    baseline_corrected = correct_baseline(standard_baseline, 
+                                          current_site_scale)
     
     # Create baseline funcional acre report
-    baseline_facres = calc_facres(desktop_results, baseline_corrected)
+    baseline_facres = calc_facres(desktop_results, baseline_corrected, 
+                                  current_ls)
     
     # Calculate current credits    
-    current_credits = calc_credits(baseline_facres, current_facres)
+    current_credits = calc_credits(project, desktop_results,baseline_facres, 
+                                   current_facres)
     
     # Project site-scale values
-    projected_site_scale = project_site_scale(projected_values, site_scale_values)
+    projected_site_scale = project_site_scale(projected_values, 
+                                              site_scale_values)
     
     # Score projected site-scale values
-    projected_scores = score_site_scale(projected_site_scale)
+    projected_scores = score_site_scale(project, projected_site_scale)
     
     # Create projected functional acre report
-    projected_facres = calc_facres(desktop_results, projected_scores)
+    projected_facres = calc_facres(desktop_results, projected_scores, 
+                                   projected_ls)
     
     # Calculate projected credits
-    projected_credits = calc_credits(current_facres, projected_facres)
+    projected_credits = calc_credits(project, desktop_results, current_facres, 
+                                     projected_facres)
     
-    # Save outputs
-    current_credits.to_csv('data/processed/current_credits' + str(output_suffix) + '.csv')
-    projected_credits.to_csv('data/processed/projected_credits' + str(output_suffix) + '.csv')
-    
-    conn.close()
+    return current_credits, projected_credits
 
 
+def save_output(output, file_name):
+    save_name = os.path.join('data/outputs', file_name)
+    output.to_csv(save_name)
+        
+    
 def main():
-    run_calculator()
+    # Instantiate CreditData object
+    C = CreditData(db='test.db')
+                   
+    # run calculator
+    current_credits, projected_credits = run_calculator(
+        project=C,
+        projected_values_input=None
+        )
     
+    # save outputs
+    save_output(current_credits, 'current_credits.csv')
+    save_output(projected_credits, 'projected_credits.csv')
     
+    # Close conn
+    C.conn.close()
+
+
 if __name__ == '__main__':
     main()
     

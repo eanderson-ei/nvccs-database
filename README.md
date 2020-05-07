@@ -91,6 +91,8 @@ The final version should take as input the outputs of the GIS process and the fi
 
 Try SchemaCrawler to create an ERD diagram if needed. See example [here](https://blog.stefanproell.at/2016/01/11/create-an-er-diagram-of-an-existing-sqlite-database-or-manyoother-rdbms/). You'll need to [install Java](https://java.com/en/download/manual.jsp) and add to your PATH.
 
+---
+
 An alternative to unstacking the wmz, pmu, mgmt, precip tables would be to left outer join the scores for each hab_attr on the map_unit_id and moisture_regime column and sum along the map_unit_id and hab_attr
 
 ```
@@ -107,7 +109,29 @@ becomes
 
 This is more natural for `SQL`, but less so for `pandas`. Use this to calculate credits per WMZ, PMU, or BSU. Use unstacking to get proportions needed for calculating credits in the first place.
 
+---
+
 Sqlite 3 does not have a boolean data type, rather stores True/False as 1/0. Maintain this behavior (as opposed to 'True', 'False' as text) as a standard. In pandas, convert boolean data types to int and then to boolean to block for reading as an object. (`.astype('int').astype('bool')`)
+
+---
+
+For some reason, between sessions my simple .bat file stopped working. It probably was finding a different install of python and missing the xlrd package (although I think both of my python installs include xlrd). Ideally, I'd be working in a conda environment and the .bat file would activate it first. Here's some code that might work:
+
+```
+call activate [my_env]
+python my_script.py
+call conda deactivate
+```
+
+This will require that anyone else using the batch file also has replicated my environment. First, to export the environment:
+
+`conda list --explicit > <environment name>.txt`
+
+To create from this text file
+
+`conda env create --file <environment name>.txt` or `conda create --name <name> --file <file name>.txt`
+
+This [conda cheat sheet](https://docs.conda.io/projects/conda/en/4.6.0/_downloads/52a95608c49671267e40c689e0bc00ca/conda-cheatsheet.pdf) is great.
 
 ## Next Steps
 
