@@ -6,7 +6,7 @@ Save the Project Calculator within `data/external/` and specify path in `calc_cr
 
 Recommend downloading [SQLite Studio](https://sqlitestudio.pl/) for exploring the database.
 
-
+REMOVE GENSIM AND SCIPY FROM REQUIREMENTS
 
 ## Contents
 

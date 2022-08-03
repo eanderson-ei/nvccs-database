@@ -33,6 +33,7 @@ class CreditCalculator:
             skiprows=5, header=None,
             usecols="C,P:R"
         )
+        current_ls_df = current_ls_df[current_ls_df.iloc[:,0].notnull()]
         return current_ls_df
     
     @property
@@ -44,6 +45,7 @@ class CreditCalculator:
             skiprows=5, header=None,
             usecols="C,S:U"
         )
+        projected_ls_df = projected_ls_df[projected_ls_df.iloc[:,0].notnull()]
         return projected_ls_df
     
     @property
