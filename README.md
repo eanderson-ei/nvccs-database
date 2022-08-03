@@ -1,4 +1,5 @@
 # README
+THIS LIBRARY HAS BEEN SUPERSEDED BY THE NV-ADMIN REPOSITORY DATABASE LIBRARY
 
 This library reads the NV CCS Credit Project Calculator v1.6 into a database. The intent of this library is to evolve to serve as the Registry Database. For now, it serves as an efficient means of reading a single Project Calculator.
 
